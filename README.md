@@ -12,15 +12,22 @@ A busy pet owner needs help staying consistent with pet care. They want an assis
 
 Your job is to design the system first (UML), then implement the logic in Python, then connect it to the Streamlit UI.
 
-## What you will build
+## Features
 
-Your final app should:
-
-- Let a user enter basic owner + pet info
-- Let a user add/edit tasks (duration + priority at minimum)
-- Generate a daily schedule/plan based on constraints and priorities
-- Display the plan clearly (and ideally explain the reasoning)
-- Include tests for the most important scheduling behaviors
+- Basic pet and task info
+- Sort tasks by priority or date
+- Filter tasks by pets and completion status
+- Automatically create the next occurrence for recurring tasks when marking them as done
+- Scheduling conflict warnings
+- **Bonus**: Suggest next available time slot
+- **Bonus**: Sort by priority and time (either alone) with order importance
+    - For example: priority then time, time then priority, just time, and just priority
+- **Bonus**: Save data across page refreshes via a JSON file.
+- **Bonus**: Clean polished UI:
+    - Tables for neatly displaying pets
+    - Cards for neatly displaying tasks
+    - Emojis for priorities, conflicts, delete buttons, and complete buttons for easy recognition
+    - Color coded messages (e.g., red for errors)
 
 ## Getting started
 
