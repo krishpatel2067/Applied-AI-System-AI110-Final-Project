@@ -41,3 +41,22 @@ pip install -r requirements.txt
 5. Add tests to verify key behaviors.
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
+
+## Testing PawPal+
+
+```bash
+pytest tests/test_pawpal.py
+```
+
+Confidence Level: 4.5/5
+
+I'm very confident of the tests because they cover a lot of ground:
+
+* Both storing by date/time and sorting by priority
+* Both filtering by pets and completion status
+* Conflict detection
+    * Covering edge cases such as adjacent blocks
+* Recurring events automatically creating new events upon completion
+    * Covering once, daily, weekly, monthly, and yearly frequencies
+
+However, there many be very small gaps in the coverage since no one is perfect, so I left room for that doubt via 4.5 instead of a 5.
