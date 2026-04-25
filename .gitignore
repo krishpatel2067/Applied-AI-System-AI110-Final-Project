@@ -4,4 +4,6 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 *.json
+!package.json
+!package-lock.json
 .env
