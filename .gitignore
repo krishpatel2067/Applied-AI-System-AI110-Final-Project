@@ -3,7 +3,7 @@ __pycache__/
 .venv_new/
 .pytest_cache/
 .DS_Store
-*.json
+*data*.json
 !package.json
 !package-lock.json
 .env
