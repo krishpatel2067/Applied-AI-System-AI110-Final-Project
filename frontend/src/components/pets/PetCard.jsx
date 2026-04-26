@@ -22,7 +22,7 @@ export default function PetCard({ pet, onDelete }) {
           {pet.species} · {pet.age_years}y
         </span>
         {pet.notes && (
-          <span className="text-xs text-muted-foreground truncate">{pet.notes}</span>
+          <span className="text-xs text-muted-foreground break-words">{pet.notes}</span>
         )}
       </div>
       <Button

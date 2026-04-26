@@ -1,15 +1,26 @@
 """
 backend/routers/ask.py
 ----------------------
-POST /ask  — RAG-powered pet-care advisor.
+POST /ask  — RAG-powered pet-care advisor with a specialised persona.
+
+Phase 6 additions
+-----------------
+* Persona: Pawsley — warm, playful, pet-loving tone.
+* Structured output: Gemini is asked for JSON { answer, tips, vet_alert }
+  so each section can be rendered distinctly in the UI.
+* Guardrail: vet_alert fires only when the model detects a health risk;
+  off-topic questions are refused by the system prompt.
 
 Flow:
-  1. Retrieve top FAQ chunks + live user data via TF-IDF (retriever.py).
-  2. Build a structured prompt (system + user message) that grounds Gemini
-     in the retrieved context.
-  3. Call the Gemini API and return the answer + source citations.
+  1. Retrieve top FAQ chunks + live user data via TF-IDF.
+  2. Build a grounded prompt with the retrieved context.
+  3. Call Gemini in JSON mode and parse the structured response.
+  4. Return { answer, tips, vet_alert, sources }.
 """
 
+from __future__ import annotations
+
+import json
 import os
 
 import google.generativeai as genai
@@ -24,29 +35,47 @@ from schemas import AskIn, AskOut, SourceOut
 router = APIRouter(prefix="/ask", tags=["advisor"])
 
 # ---------------------------------------------------------------------------
-# System prompt — defines the AI persona and grounding rules
+# Persona & structured-output system prompt (Phase 6 specialisation)
 # ---------------------------------------------------------------------------
 
-_SYSTEM_PROMPT = """You are PawPal++, a knowledgeable and friendly pet-care advisor.
-Answer the user's question using ONLY the information provided in the context below.
-If the context does not contain enough information to answer the question fully,
-say so honestly and recommend consulting a licensed veterinarian.
+_SYSTEM_PROMPT = """\
+You are Pawsley, PawPal++'s warm and playful pet-care advisor who genuinely adores animals.
+Your tone is friendly, encouraging, and occasionally uses light pet-themed warmth
+("your fluffy friend", "your little furball") — but you never sacrifice accuracy for cuteness.
 
-Rules:
-- Be concise: 2-5 sentences unless a longer answer is clearly warranted.
-- Do not invent facts or medication dosages not present in the context.
-- Refer to the owner's actual pets by name when the live data is relevant.
-- Do not answer questions unrelated to pet care (e.g. cooking, finance, coding).
+Answer using ONLY the information in the provided context.
+If the context is insufficient, say so warmly and suggest consulting a vet.
+Do NOT answer questions unrelated to pet care (cooking, finance, coding, etc.) — \
+respond with a gentle redirect instead.
+Do NOT invent facts, medication dosages, or treatments absent from the context.
+Refer to the owner's actual pets by name when live data is relevant.
+
+You MUST respond with a single JSON object — no markdown, no code fences:
+{
+  "answer":    "<main response, 2-5 sentences, friendly Pawsley tone>",
+  "tips":      ["<short actionable tip>"],
+  "vet_alert": "<calm urgent message if professional care may be needed, else null>"
+}
+
+Field rules:
+  answer    — conversational, warm, grounded in context only.
+  tips      — 0 to 3 practical bite-sized actions the owner can take today; \
+empty array [] if none apply.
+  vet_alert — set ONLY for symptoms, illness, injury, medication questions, or any \
+situation where delaying professional care could harm the animal. \
+Calm and clear, not alarmist. Null otherwise.
 """
+
+# ---------------------------------------------------------------------------
+# Prompt builder
+# ---------------------------------------------------------------------------
 
 
 def _build_prompt(question: str, chunks: list[dict]) -> str:
-    """Assemble the grounded prompt sent to Gemini."""
-    context_blocks: list[str] = []
-    for chunk in chunks:
-        header = f"[{chunk['title']}]"
-        context_blocks.append(f"{header}\n{chunk['content']}")
-
+    """Assemble the grounded user-turn prompt sent to Gemini."""
+    context_blocks = [
+        f"[{chunk['title']}]\n{chunk['content']}" for chunk in chunks
+    ]
     context_text = "\n\n".join(context_blocks)
     return (
         f"CONTEXT:\n{context_text}\n\n"
@@ -59,22 +88,21 @@ def _build_prompt(question: str, chunks: list[dict]) -> str:
 # Route
 # ---------------------------------------------------------------------------
 
+
 @router.post("", response_model=AskOut)
 def ask_advisor(
     body: AskIn,
     scheduler: Scheduler = Depends(require_owner),
 ) -> AskOut:
     """
-    Answer a pet-care question using retrieved context + Gemini.
+    Answer a pet-care question using retrieved context + Gemini (Pawsley persona).
 
-    The endpoint:
-      - Runs TF-IDF retrieval over the FAQ + live user data.
-      - Constructs a grounded prompt and calls the Gemini model.
-      - Returns the model's answer alongside the source chunks used.
+    Returns a structured response — answer, tips, optional vet alert — alongside
+    the source chunks used to ground the reply.
 
     Raises:
-        422: If the request body is malformed.
-        503: If the Gemini API key is missing or the model call fails.
+        503: GEMINI_API_KEY missing or Gemini call fails.
+        502: Gemini returned unparseable JSON.
     """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -83,34 +111,45 @@ def ask_advisor(
             detail="GEMINI_API_KEY is not configured. Set it in your .env file.",
         )
 
-    # ── Retrieve relevant context ────────────────────────────────────────────
+    # ── Retrieval ────────────────────────────────────────────────────────────
     chunks = retrieve(body.question, scheduler, top_k=4)
-
-    # ── Build and send prompt ────────────────────────────────────────────────
     prompt = _build_prompt(body.question, chunks)
 
+    # ── Gemini call (JSON mode) ───────────────────────────────────────────────
     try:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel(
             model_name=GEMINI_MODEL,
             system_instruction=_SYSTEM_PROMPT,
         )
-        response = model.generate_content(prompt)
-        answer = response.text.strip()
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json",
+            ),
+        )
+        raw = response.text.strip()
     except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Gemini API call failed: {exc}")
+
+    # ── Parse structured response ─────────────────────────────────────────────
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
         raise HTTPException(
-            status_code=503,
-            detail=f"Gemini API call failed: {exc}",
+            status_code=502,
+            detail=f"Gemini returned invalid JSON: {exc}. Raw: {raw[:200]}",
         )
 
-    # ── Build source list for the response ──────────────────────────────────
+    # ── Sources ───────────────────────────────────────────────────────────────
     sources = [
-        SourceOut(
-            id=chunk["id"],
-            title=chunk["title"],
-            source=chunk.get("source", "faq"),
-        )
-        for chunk in chunks
+        SourceOut(id=c["id"], title=c["title"], source=c.get("source", "faq"))
+        for c in chunks
     ]
 
-    return AskOut(answer=answer, sources=sources)
+    return AskOut(
+        answer=data.get("answer", ""),
+        tips=data.get("tips", []),
+        vet_alert=data.get("vet_alert") or None,
+        sources=sources,
+    )

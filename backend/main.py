@@ -15,9 +15,10 @@ from dotenv import load_dotenv
 # Load .env before anything else so os.environ is populated for all imports.
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from routers import owner, pets, tasks, slots, ask
+from fastapi.responses import JSONResponse
+from routers import owner, pets, tasks, slots, ask, agent
 
 # ---------------------------------------------------------------------------
 # Application instance
@@ -44,6 +45,24 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
+# Global exception handler
+# ---------------------------------------------------------------------------
+# Plain Python exceptions (ValueError, KeyError, etc.) that escape a route
+# handler skip FastAPI's ExceptionMiddleware and reach ServerErrorMiddleware,
+# which produces a 500 *after* CORSMiddleware has already run — so the
+# response has no Access-Control-Allow-Origin header and the browser reports a
+# CORS error instead of the real 500.  This handler converts every unhandled
+# exception into a JSONResponse before that happens.
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {exc}"},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -54,6 +73,7 @@ app.include_router(pets.router)
 app.include_router(tasks.router)
 app.include_router(slots.router)
 app.include_router(ask.router)
+app.include_router(agent.router)
 
 
 @app.get("/health", tags=["meta"])

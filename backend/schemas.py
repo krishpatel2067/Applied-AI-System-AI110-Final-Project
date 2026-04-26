@@ -126,6 +126,69 @@ class SlotOut(BaseModel):
     time_start: str  # "HH:MM"
 
 
+# ── Agentic Setup Planner ─────────────────────────────────────────────────────
+
+
+class AgentReasoningStep(BaseModel):
+    """One labeled step in the agent's planning reasoning."""
+
+    step: str    # short name, e.g. "Species assessment"
+    detail: str  # one or two sentences of explanation
+
+
+class AgentPetDraft(BaseModel):
+    """One pet the agent proposes to create."""
+
+    name: str
+    species: str
+    age_years: float = 0.0
+    notes: str = ""
+
+
+class AgentTaskDraft(BaseModel):
+    """One task the agent proposes to schedule."""
+
+    name: str
+    description: str = ""
+    frequency: str                  # Once | Daily | Weekly | Monthly | Yearly
+    priority: str                   # HIGH | MEDIUM | LOW
+    date: str                       # YYYY-MM-DD (string so the draft round-trips cleanly)
+    time_start: Optional[str] = None  # HH:MM or null
+    duration_minutes: int = 0
+    pet_names: list[str] = Field(
+        default_factory=list,
+        description="Names of pets this task applies to (must match draft pet names).",
+    )
+
+
+class AgentPlanIn(BaseModel):
+    """Free-text prompt describing what the user needs."""
+
+    prompt: str = Field(..., min_length=1)
+
+
+class AgentPlanOut(BaseModel):
+    """The agent's proposed care plan — not yet persisted."""
+
+    reasoning: list[AgentReasoningStep]
+    pets: list[AgentPetDraft]
+    tasks: list[AgentTaskDraft]
+
+
+class AgentConfirmIn(BaseModel):
+    """The approved plan sent back by the client to persist."""
+
+    pets: list[AgentPetDraft]
+    tasks: list[AgentTaskDraft]
+
+
+class AgentConfirmOut(BaseModel):
+    """Summary of what was actually created."""
+
+    pets_created: int
+    tasks_created: int
+
+
 # ── AI Advisor (RAG) ──────────────────────────────────────────────────────────
 
 
@@ -144,9 +207,18 @@ class SourceOut(BaseModel):
 
 
 class AskOut(BaseModel):
-    """Response returned by the AI advisor."""
+    """Structured response returned by the AI advisor.
+
+    answer    — main reply in Pawsley's warm, friendly tone.
+    tips      — 0-3 short actionable tips the owner can act on today.
+    vet_alert — non-null only when a health risk is detected and professional
+                care may be needed; kept calm and clear, not alarmist.
+    sources   — retrieved knowledge chunks used to ground the answer.
+    """
 
     answer: str
+    tips: list[str]
+    vet_alert: Optional[str]
     sources: list[SourceOut]
 
 

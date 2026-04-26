@@ -86,6 +86,24 @@ export const deleteTask = (taskId) =>
 export const completeTask = (taskId) =>
   request(`/tasks/${taskId}/complete`, { method: 'POST' })
 
+// ── Agentic Setup Planner ─────────────────────────────────────────────────────
+
+/**
+ * Ask the agent to draft a care plan from a free-text prompt.
+ * Body: { prompt: string }
+ * Returns { reasoning: [{step, detail}], pets: [...], tasks: [...] }
+ */
+export const agentPlan = (prompt) =>
+  request('/agent/plan', { method: 'POST', body: JSON.stringify({ prompt }) });
+
+/**
+ * Persist an approved agent plan.
+ * Body: { pets: [...], tasks: [...] }
+ * Returns { pets_created: number, tasks_created: number }
+ */
+export const agentConfirm = (plan) =>
+  request('/agent/confirm', { method: 'POST', body: JSON.stringify(plan) });
+
 // ── AI Advisor ────────────────────────────────────────────────────────────────
 
 /**

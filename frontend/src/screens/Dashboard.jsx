@@ -22,6 +22,7 @@ import TaskForm from '@/components/tasks/TaskForm'
 import TaskList from '@/components/tasks/TaskList'
 import SuggestSlotButton from '@/components/tasks/SuggestSlotButton'
 import AskPanel from '@/components/advisor/AskPanel'
+import SetupAgent from '@/components/advisor/SetupAgent'
 
 export default function Dashboard({ owner, onDeleteOwner }) {
   // ── Filter / sort state ──────────────────────────────────────────────────
@@ -39,8 +40,8 @@ export default function Dashboard({ owner, onDeleteOwner }) {
   const [suggestedSlot, setSuggestedSlot] = useState(null)
 
   // ── Data hooks ───────────────────────────────────────────────────────────
-  const { pets, addPet, deletePet } = usePets()
-  const { tasks, addTask, deleteTask, completeTask } = useTasks({
+  const { pets, addPet, deletePet, refetch: refetchPets } = usePets()
+  const { tasks, addTask, deleteTask, completeTask, refetch: refetchTasks } = useTasks({
     filterPet, filterStatus, sortBy,
   })
 
@@ -71,14 +72,24 @@ export default function Dashboard({ owner, onDeleteOwner }) {
 
       <Separator />
 
-      {/* ── AI Advisor ── */}
-      <section className="flex flex-col gap-4 rounded-lg border p-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <span>AI Pet-Care Advisor</span>
-          <span className="text-xs font-normal text-muted-foreground">(powered by Gemini)</span>
-        </h2>
-        <AskPanel />
-      </section>
+      {/* ── AI panels ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section className="flex flex-col gap-4 rounded-lg border p-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <span>Setup Planner</span>
+            <span className="text-xs font-normal text-muted-foreground">(powered by Gemini)</span>
+          </h2>
+          <SetupAgent onConfirmed={() => { refetchPets(); refetchTasks(); }} />
+        </section>
+
+        <section className="flex flex-col gap-4 rounded-lg border p-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <span>Care Advisor</span>
+            <span className="text-xs font-normal text-muted-foreground">(powered by Gemini)</span>
+          </h2>
+          <AskPanel />
+        </section>
+      </div>
 
       <Separator />
 
